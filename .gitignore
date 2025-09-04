@@ -60,3 +60,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Do not commit secrets
+Config/Secrets.xcconfig
+Secrets.xcconfig
+
+
