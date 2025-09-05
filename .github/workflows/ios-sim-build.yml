@@ -1,0 +1,55 @@
+name: iOS Simulator Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Homebrew (if needed)
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> $HOME/.zprofile
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Create Secrets.xcconfig from repo secret
+        run: |
+          mkdir -p Config
+          echo "HERE_API_KEY = ${{ secrets.HERE_API_KEY }}" > Config/Secrets.xcconfig
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator (Debug)
+        run: |
+          xcodebuild \
+            -scheme Tariqak \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -configuration Debug \
+            -derivedDataPath build \
+            build | xcpretty || true
+
+      - name: Package .app as zip
+        run: |
+          APP_PATH=$(ls -d build/Build/Products/Debug-iphonesimulator/*.app | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found. Check previous step logs."; exit 1
+          fi
+          cd "$(dirname "$APP_PATH")"
+          zip -r Tariqak-Simulator.zip "$(basename "$APP_PATH")"
+          mv Tariqak-Simulator.zip "$GITHUB_WORKSPACE"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tariqak-Simulator
+          path: Tariqak-Simulator.zip
