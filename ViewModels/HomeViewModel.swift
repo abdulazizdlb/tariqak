@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-class HomeViewModel: ObservableObject {
+final class HomeViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var prediction: DayPrediction?
 
@@ -26,6 +26,8 @@ class HomeViewModel: ObservableObject {
             stepMinutes: 15
         ) {
             self.prediction = best
+        } else {
+            self.prediction = nil
         }
     }
 }
