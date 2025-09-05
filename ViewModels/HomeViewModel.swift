@@ -1,33 +1,53 @@
 import Foundation
+import SwiftUI
 
-@MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var isLoading = false
-    @Published var prediction: DayPrediction?
+    // إدخالات المستخدم
+    @Published var home: String = ""
+    @Published var work: String = ""
+    @Published var selectedDays: Set<Int> = [1,2,3,4,5] // افتراضي: أحاد → خميس
 
-    let engine: PredictionEngine
-    let commute: Commute
+    // نافذة الوقت
+    @Published var windowStart: Date
+    @Published var windowEnd: Date
 
-    init(engine: PredictionEngine, commute: Commute) {
-        self.engine = engine
-        self.commute = commute
+    // ناتج العرض
+    @Published var bestTime: Date?
+    @Published var expectedDuration: Int = 20
+
+    private let calendar = Calendar(identifier: .gregorian)
+
+    init() {
+        // افتراض 7:00 إلى 8:30
+        let now = Date()
+        let start = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
+        let end = Calendar.current.date(bySettingHour: 8, minute: 30, second: 0, of: now) ?? now
+        self.windowStart = start
+        self.windowEnd = end
+
+        // قيمة أولية ظاهرة
+        self.bestTime = start.addingTimeInterval(30 * 60)
     }
 
-    func loadToday() async {
-        isLoading = true
-        defer { isLoading = false }
+    var bestTimeString: String {
+        guard let t = bestTime else { return "--:--" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ar")
+        f.dateFormat = "h:mm a"
+        return f.string(from: t)
+    }
 
-        let today = Date()
-        if let best = await engine.bestDeparture(
-            origin: commute.home,
-            destination: commute.work,
-            day: today,
-            window: commute.preferredWindow,
-            stepMinutes: 15
-        ) {
-            self.prediction = best
-        } else {
-            self.prediction = nil
+    // حساب مبدئي (Mock) — لاحقًا سنبدله بنداء HERE API
+    func calculateNow() {
+        // مثال: نجرب كل 10 دقائق ضمن النافذة ونختار منتصفها كوقت أمثل مؤقتًا
+        let step: TimeInterval = 10 * 60
+        var times: [Date] = []
+        var cur = windowStart
+        while cur <= windowEnd {
+            times.append(cur)
+            cur = cur.addingTimeInterval(step)
         }
+        bestTime = times[times.count / 2]
+        expectedDuration = Int.random(in: 14...26) // مؤقت للتجربة
     }
 }
