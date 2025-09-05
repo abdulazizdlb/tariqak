@@ -1,19 +1,25 @@
 import Foundation
 
+/// بيانات تفضيلات المستخدم (MVP)
 struct UserPrefs: Codable {
     var homeAddress: String = ""
     var workAddress: String = ""
-    var weekdays: [Int] = [] // 1=Sun ... 7=Sat (أو حسب تقويمك)
+    /// نخزّن الأيام كأرقام (0=السبت، 1=الأحد، … 6=الجمعة)
+    var weekdays: [Int] = []
 }
 
+/// مخزن بسيط فوق UserDefaults
 final class UserPrefsStore {
-    private let key = "UserPrefs"
     static let shared = UserPrefsStore()
     private init() {}
 
+    private let key = "UserPrefs"
+
     func load() -> UserPrefs {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let prefs = try? JSONDecoder().decode(UserPrefs.self, from: data) else {
+        guard
+            let data = UserDefaults.standard.data(forKey: key),
+            let prefs = try? JSONDecoder().decode(UserPrefs.self, from: data)
+        else {
             return UserPrefs()
         }
         return prefs
