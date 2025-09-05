@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct HomeView: View {
-    // متغيرات تمثل مدخلات المستخدم
     @State private var homeAddress: String = ""
     @State private var workAddress: String = ""
-    @State private var selectedDays: Set<Int> = []  // نخزن الأيام كأرقام
+    @State private var selectedDays: Set<Int> = []
+
+    @State private var showSavedToast = false   // للتحكم بعرض التوست
 
     private let weekdayNames = ["السبت","الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
 
@@ -74,15 +75,18 @@ struct HomeView: View {
             .navigationTitle("الرئيسية")
             .environment(\.layoutDirection, .rightToLeft)
         }
+        // هنا نعرض التوست عند الحفظ
+        .toast(isPresented: $showSavedToast, text: "تم حفظ بياناتك ✅", duration: 2.0)
     }
 
-    // حفظ البيانات
     private func savePrefs() {
         var prefs = UserPrefs()
         prefs.homeAddress = homeAddress
         prefs.workAddress = workAddress
         prefs.weekdays = Array(selectedDays)
         UserPrefsStore.shared.save(prefs)
-        print("✅ Saved to UserDefaults: \(prefs)")
+
+        // نعرض التوست
+        withAnimation { showSavedToast = true }
     }
 }
