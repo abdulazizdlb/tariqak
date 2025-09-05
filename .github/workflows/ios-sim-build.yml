@@ -7,14 +7,15 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Homebrew (if needed)
         run: |
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> $HOME/.zprofile
           eval "$(/opt/homebrew/bin/brew shellenv)"
 
@@ -29,6 +30,14 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Select latest Xcode on this runner
+        run: |
+          echo "Installed Xcodes:"
+          ls -1 /Applications | grep Xcode || true
+          # جرّب اختيار Xcode 16 إن وجد، وإلا يرجع لـ 15.4
+          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode_15.4.app
+          xcodebuild -version
+
       - name: Build for iOS Simulator (Debug)
         run: |
           set -e
@@ -40,7 +49,6 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             build
-
 
       - name: Package .app as zip
         run: |
@@ -56,7 +64,6 @@ jobs:
           cd "$(dirname "$APP_PATH")"
           zip -r Tariqak-Simulator.zip "$(basename "$APP_PATH")"
           mv Tariqak-Simulator.zip "$GITHUB_WORKSPACE"
-
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
