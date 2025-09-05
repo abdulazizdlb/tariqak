@@ -1,14 +1,21 @@
 import SwiftUI
 
 struct HomeView: View {
-    // مدخلات
+    // MARK: - Inputs
     @State private var homeAddress: String = ""
     @State private var workAddress: String = ""
     @State private var selectedDays: Set<String> = []
+
+    // Toast
     @State private var showSavedToast = false
 
+    // 👇 Closure يُستدعى عند الضغط "احسب الآن"
+    var onCalculate: ((Commute) -> Void)? = nil
+
+    // Days (RTL ready)
     private let days = ["السبت","الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
-    private let grid  = [GridItem(.adaptive(minimum: 84), spacing: 10, alignment: .trailing)]
+    // شبكة متكيفة لأزرار الأيام
+    private let grid = [GridItem(.adaptive(minimum: 84), spacing: 10, alignment: .trailing)]
 
     var body: some View {
         ZStack {
@@ -17,7 +24,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .trailing, spacing: 20) {
 
-                    // عنوان علوي أنيق
+                    // Header
                     HStack {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 6) {
@@ -28,10 +35,17 @@ struct HomeView: View {
                         }
                     }
 
-                    // كارت المدخلات
+                    // Card: Inputs
                     VStack(alignment: .trailing, spacing: 16) {
-                        LabeledField(title: "منزلي", placeholder: "ادخل عنوان المنزل", text: $homeAddress, icon: "house.fill")
-                        LabeledField(title: "عملي",  placeholder: "ادخل عنوان العمل",  text: $workAddress, icon: "briefcase.fill")
+                        LabeledField(title: "منزلي",
+                                     placeholder: "ادخل عنوان المنزل",
+                                     text: $homeAddress,
+                                     icon: "house.fill")
+
+                        LabeledField(title: "عملي",
+                                     placeholder: "ادخل عنوان العمل",
+                                     text: $workAddress,
+                                     icon: "briefcase.fill")
 
                         VStack(alignment: .trailing, spacing: 10) {
                             Text("أيام الذهاب")
@@ -40,7 +54,8 @@ struct HomeView: View {
 
                             LazyVGrid(columns: grid, alignment: .trailing, spacing: 10) {
                                 ForEach(days, id: \.self) { day in
-                                    DayPill(title: day, isOn: selectedDays.contains(day)) {
+                                    DayPill(title: day,
+                                            isOn: selectedDays.contains(day)) {
                                         toggleDay(day)
                                     }
                                 }
@@ -50,28 +65,61 @@ struct HomeView: View {
                     .padding(16)
                     .background(Theme.card)
                     .cornerRadius(Theme.corner)
-                    .shadow(color: .black.opacity(0.08), radius: Theme.cardShadow, y: 4)
+                    .shadow(color: .black.opacity(0.08),
+                            radius: Theme.cardShadow, y: 4)
 
-                    // زر حفظ بتدرّج لوني
-                    Button(action: saveInputs) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "tray.and.arrow.down.fill")
-                            Text("حفظ")
-                                .fontWeight(.semibold)
+                    // Actions
+                    VStack(spacing: 12) {
+                        // حفظ
+                        Button(action: saveInputs) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "tray.and.arrow.down.fill")
+                                Text("حفظ").fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .foregroundColor(.white)
+                            .background(Theme.brandGradient)
+                            .cornerRadius(14)
+                            .shadow(color: Theme.brandEnd.opacity(0.25),
+                                    radius: 12, y: 6)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .foregroundColor(.white)
-                        .background(Theme.brandGradient)
-                        .cornerRadius(14)
-                        .shadow(color: Theme.brandEnd.opacity(0.25), radius: 12, y: 6)
+                        .buttonStyle(.plain)
+
+                        // احسب الآن → يبني Commute وينادي onCalculate
+                        Button {
+                            let commute = Commute(
+                                homeAddress: homeAddress
+                                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                                workAddress: workAddress
+                                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                                days: Array(selectedDays)
+                            )
+                            onCalculate?(commute)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "sparkle.magnifyingglass")
+                                Text("احسب الآن").fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .foregroundColor(Theme.brandEnd)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color(.tertiarySystemBackground))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Theme.brandEnd.opacity(0.25), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(20)
             }
 
-            // توست أنيق
+            // Toast
             if showSavedToast {
                 Label("تم حفظ بياناتك", systemImage: "checkmark.seal.fill")
                     .font(.subheadline.weight(.semibold))
@@ -84,9 +132,10 @@ struct HomeView: View {
                     .frame(maxHeight: .infinity, alignment: .bottom)
             }
         }
-        // اتجاه RTL
+        // RTL
         .environment(\.layoutDirection, .rightToLeft)
-        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: showSavedToast)
+        .animation(.spring(response: 0.35, dampingFraction: 0.9),
+                   value: showSavedToast)
         .onAppear(perform: loadSaved)
     }
 
@@ -97,14 +146,12 @@ struct HomeView: View {
     }
 
     private func saveInputs() {
-        // احفظ (عدّل حسب مخزنك إن لزم)
         UserPrefsStore.shared.save(
             homeAddress: homeAddress,
             workAddress: workAddress,
             days: Array(selectedDays).sorted(by: daySort)
         )
 
-        // هابتك بسيط
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
@@ -124,14 +171,13 @@ struct HomeView: View {
     }
 
     private func daySort(_ a: String, _ b: String) -> Bool {
-        let order = ["السبت","الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"]
-        return (order.firstIndex(of: a) ?? 0) < (order.firstIndex(of: b) ?? 0)
+        (days.firstIndex(of: a) ?? 0) < (days.firstIndex(of: b) ?? 0)
     }
 }
 
 // MARK: - Components
 
-/// حقل بعنوان وأيقونة — تصميم حديث
+/// حقل بعنوان + أيقونة (مودرن)
 private struct LabeledField: View {
     let title: String
     let placeholder: String
@@ -145,7 +191,6 @@ private struct LabeledField: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             HStack(spacing: 10) {
-                // الأيقونة على اليسار تناسب RTL
                 Image(systemName: icon)
                     .foregroundColor(Theme.brandEnd)
                 TextField(placeholder, text: $text)
@@ -164,7 +209,7 @@ private struct LabeledField: View {
     }
 }
 
-/// كبسولة يوم مع حالة مفعّلة/معطّلة
+/// كبسولة لاختيار اليوم
 private struct DayPill: View {
     let title: String
     let isOn: Bool
@@ -186,7 +231,8 @@ private struct DayPill: View {
                 .overlay(
                     Capsule().strokeBorder(
                         isOn ? Theme.brandEnd.opacity(0.55)
-                             : Color.black.opacity(0.08), lineWidth: 1
+                             : Color.black.opacity(0.08),
+                        lineWidth: 1
                     )
                 )
                 .foregroundColor(isOn ? Theme.brandEnd : .primary)
