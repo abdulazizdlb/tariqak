@@ -6,16 +6,18 @@ struct Prediction {
 }
 
 struct PredictionEngine {
-    private let provider = HereTrafficProvider()
+    let provider: HereTrafficProvider
 
+    /// نسخة أولية: نحسب رحلة "الآن" (لاحقًا نوسعها للبيانات التاريخية)
     func bestDeparture(for commute: Commute) async throws -> Prediction {
-        // 1. Geocode addresses
-        let from = try await provider.geocode(address: commute.homeAddress)
-        let to   = try await provider.geocode(address: commute.workAddress)
+        // 1) Geocode
+        let home = try await provider.geocode(address: commute.homeAddress)
+        let work = try await provider.geocode(address: commute.workAddress)
 
-        // 2. جرب وقت الرحلة الحالي (تقدر توسع لاحقًا للتاريخية)
-        let minutes = try await provider.route(from: from, to: to)
+        // 2) Route الآن
+        let minutes = try await provider.routeMinutes(from: home, to: work)
 
+        // 3) نرجّع نتيجة مبدئية
         return Prediction(bestTime: Date(), expectedDurationMinutes: minutes)
     }
 }
