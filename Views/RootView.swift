@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     private let engine = PredictionEngine(provider: HereTrafficProvider())
-    @State private var navCommute: Commute? = nil
+    @State private var navCommute: Commute?   // لازم تكون Optional
 
     var body: some View {
         NavigationStack {
