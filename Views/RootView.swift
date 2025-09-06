@@ -1,24 +1,23 @@
 import SwiftUI
 
 struct RootView: View {
-    // وفّر محرّك التنبؤ مرة واحدة
     private let engine = PredictionEngine(provider: HereTrafficProvider())
+
+    // 👇 حالة تخزن الـ commute اللي اختاره المستخدم
+    @State private var navCommute: Commute? = nil
 
     var body: some View {
         NavigationStack {
             HomeView(onCalculate: { commute in
-                // عند الضغط "احسب الآن" انتقل لشاشة النتيجة
-                pathToResult(commute: commute)
+                // نخزن commute → التغيير يفتح شاشة النتيجة
+                navCommute = commute
             })
             .navigationTitle("الرئيسية")
+            // 👇 هنا الوجهة لما navCommute يصير فيه قيمة
+            .navigationDestination(item: $navCommute) { commute in
+                ResultView(engine: engine, commute: commute)
+            }
         }
         .environment(\.layoutDirection, .rightToLeft)
-    }
-
-    @ViewBuilder
-    private func pathToResult(commute: Commute) -> some View {
-        // التفاف سريع للانتقال
-        NavigationLink("", destination: ResultView(engine: engine, commute: commute))
-            .hidden()
     }
 }
