@@ -8,10 +8,16 @@ on:
 jobs:
   build:
     runs-on: macos-15
-
+    env:
+      HERE_API_KEY: ${{ secrets.HERE_API_KEY }}
+      
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Create Secrets.xcconfig from repo secret
+        run: |
+          mkdir -p Config
+          printf "HERE_API_KEY = %s\n" "$HERE_API_KEY" > Config/Secrets.xcconfig
 
       - name: Install Homebrew (if needed)
         run: |
