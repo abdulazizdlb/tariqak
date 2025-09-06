@@ -1,39 +1,52 @@
 import Foundation
-import SwiftUI
+import Combine
 
+/// ViewModel أساسي لشاشة الرئيسية.
+/// ملاحظة: هذا الإصدار مبسّط فقط لإرضاء الاستدعاءات من RootView/HomeView.
+/// سنوسّعه لاحقًا حسب احتياج الواجهة.
 final class HomeViewModel: ObservableObject {
-    @Published var home: String = ""
-    @Published var work: String = ""
-    @Published var selectedDays: Set<Int> = [1,2,3,4,5] // افتراضي: أحد–خميس
 
-    @Published var windowStart: Date
-    @Published var windowEnd: Date
+    // MARK: - Dependencies
+    let engine: PredictionEngine
 
-    @Published var bestTime: Date?
-    @Published var expectedDuration: Int = 20
+    // MARK: - Input Model
+    /// حالة التنقّل الحالية التي نمرّرها من RootView
+    @Published var commute: Commute
 
-    init() {
-        let now = Date()
-        self.windowStart = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
-        self.windowEnd   = Calendar.current.date(bySettingHour: 8, minute: 30, second: 0, of: now) ?? now
-        self.bestTime = windowStart.addingTimeInterval(30 * 60)
+    // MARK: - UI Bindings (مبدئية – نربطها لاحقًا داخل HomeView)
+    @Published var fromText: String = ""
+    @Published var toText: String = ""
+    /// نافذة زمنية مبدئية للعرض فقط (نحدّثها لاحقًا)
+    @Published var windowStart: Date = Date()
+    @Published var windowEnd: Date = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+
+    /// أيام الأسبوع المختارة: 1 = الأحد ... 7 = السبت (قابلة للتغيير حسب ما اعتمدت)
+    @Published var selectedDays: Set<Int> = []
+
+    // MARK: - Output / State
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+
+    // MARK: - Init
+    init(engine: PredictionEngine, commute: Commute) {
+        self.engine = engine
+        self.commute = commute
+
+        // تعبئة مبدئية لنصوص العناوين (اختياري)
+        // عدّل حسب حقول Commute/Coordinate عندك
+        self.fromText = ""
+        self.toText = ""
     }
 
-    var bestTimeString: String {
-        guard let t = bestTime else { return "--:--" }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ar")
-        f.dateFormat = "h:mm a"
-        return f.string(from: t)
+    // MARK: - Public helpers (نوسّعها لاحقًا)
+    /// تحديث الـ commute من إدخالات المستخدم (نضبطها لاحقًا عندما نكمل HomeView)
+    func updateCommuteIfNeeded() {
+        // هنا لاحقًا نجمع الإدخالات ونبني Commute جديد
+        // حالياً فارغة لتفادي أخطاء بناء
     }
 
-    // مؤقت للتجربة – لاحقًا نبدله بنداء HERE
-    func calculateNow() {
-        let step: TimeInterval = 10 * 60
-        var items: [Date] = []
-        var cur = windowStart
-        while cur <= windowEnd { items.append(cur); cur = cur.addingTimeInterval(step) }
-        bestTime = items[items.count / 2]
-        expectedDuration = Int.random(in: 14...26)
+    /// حفظ تفضيلات المستخدم (نضيف التخزين لاحقًا)
+    func saveUserPrefs() {
+        // نضيف تخزين UserDefaults / Keychain لاحقًا
     }
 }
