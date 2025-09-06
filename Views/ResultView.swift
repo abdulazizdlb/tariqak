@@ -1,57 +1,55 @@
 import SwiftUI
 
 struct ResultView: View {
-    @StateObject private var vm: CalculateViewModel
+    let engine: PredictionEngine
+    let commute: Commute
 
-    init(engine: PredictionEngine, commute: Commute) {
-        _vm = StateObject(wrappedValue: CalculateViewModel(engine: engine, commute: commute))
-    }
+    @State private var isLoading = true
+    @State private var prediction: Prediction?
+    @State private var errorMessage: String?
 
     var body: some View {
-        ZStack {
-            Theme.bg.ignoresSafeArea()
+        Group {
+            if isLoading {
+                ProgressView("جاري الحساب…")
+            } else if let p = prediction {
+                VStack(spacing: 16) {
+                    Text("أفضل وقت للمغادرة")
+                        .font(.title2).bold()
 
-            Group {
-                if vm.isLoading {
-                    ProgressView("جارِ الحساب...")
-                        .progressViewStyle(.circular)
-                        .font(.headline)
-                } else if let res = vm.result {
-                    VStack(alignment: .trailing, spacing: 16) {
-                        Text("أفضل وقت للخروج")
-                            .font(.title2.bold())
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(p.bestTime.formatted(date: .omitted, time: .shortened))
+                        .font(.title3)
 
-                        // بطاقة النتيجة
-                        VStack(alignment: .trailing, spacing: 8) {
-                            Text(res.bestTime.formatted(date: .omitted, time: .shortened))
-                                .font(.system(size: 36, weight: .bold))
-                            Text("المدة المتوقعة: \(res.expectedDurationMinutes) دقيقة")
-                                .foregroundColor(Theme.textSubtle)
-                        }
-                        .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .background(Theme.card)
-                        .cornerRadius(Theme.corner)
-                        .shadow(color: .black.opacity(0.08), radius: Theme.cardShadow, y: 4)
+                    Text("المدة المتوقعة: \(p.expectedDurationMinutes) دقيقة")
+                        .font(.body)
 
-                        Spacer()
-                    }
-                    .padding(20)
-                } else if let err = vm.errorMessage {
-                    VStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.orange)
-                        Text(err).multilineTextAlignment(.center)
-                    }
-                    .padding(20)
+                    Spacer()
                 }
+                .padding()
+            } else if let msg = errorMessage {
+                VStack(spacing: 12) {
+                    Text("حدث خطأ")
+                        .font(.title3).bold()
+                    Text(msg).multilineTextAlignment(.center)
+                }
+                .padding()
             }
         }
-        .environment(\.layoutDirection, .rightToLeft)
-        .task { await vm.run() }
+        .task {
+            await load()
+        }
         .navigationTitle("النتيجة")
-        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+
+    private func load() async {
+        do {
+            isLoading = true
+            errorMessage = nil
+            prediction = try await engine.bestDeparture(for: commute)
+        } catch {
+            errorMessage = (error as NSError).localizedDescription
+        }
+        isLoading = false
     }
 }
