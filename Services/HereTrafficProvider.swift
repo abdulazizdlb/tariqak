@@ -1,56 +1,35 @@
 import Foundation
 
-/// خدمة تستدعي HERE Routing API للحصول على وقت الرحلة
-public struct HereTrafficProvider {
-    let apiKey: String
-    
-    public init(apiKey: String) {
-        self.apiKey = apiKey
-    }
-    
-    /// يحسب مدة الرحلة بالثواني بين نقطتين في وقت محدد
-    public func travelTime(
-        origin: Coordinate,
-        destination: Coordinate,
-        departure: Date
-    ) async -> Int? {
-        let urlString = "https://router.hereapi.com/v8/routes" +
-        "?transportMode=car" +
-        "&origin=\(origin.latitude),\(origin.longitude)" +
-        "&destination=\(destination.latitude),\(destination.longitude)" +
-        "&departureTime=\(iso8601(departure))" +
-        "&return=summary" +
-        "&apikey=\(apiKey)"
-        
-        guard let url = URL(string: urlString) else { return nil }
-        
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let decoded = try? JSONDecoder().decode(RouteResponse.self, from: data),
-               let duration = decoded.routes.first?.sections.first?.summary.duration {
-                return duration
-            }
-        } catch {
-            print("HERE API error: \(error)")
-        }
-        return nil
-    }
-    
-    private func iso8601(_ date: Date) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f.string(from: date)
-    }
-}
+struct HereTrafficProvider {
+    private let apiKey = "YOUR_HERE_API_KEY"
 
-/// نموذج للرد من HERE
-struct RouteResponse: Codable {
-    struct Route: Codable {
-        struct Section: Codable {
-            struct Summary: Codable { let duration: Int }
-            let summary: Summary
+    func geocode(address: String) async throws -> (lat: Double, lng: Double) {
+        let query = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let url = URL(string: "https://geocode.search.hereapi.com/v1/geocode?q=\(query)&apiKey=\(apiKey)")!
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let items = json?["items"] as? [[String: Any]],
+              let pos = (items.first?["position"] as? [String: Double]),
+              let lat = pos["lat"], let lng = pos["lng"] else {
+            throw NSError(domain: "GeocodeError", code: 1)
         }
-        let sections: [Section]
+        return (lat, lng)
     }
-    let routes: [Route]
+
+    func route(from: (lat: Double, lng: Double),
+               to: (lat: Double, lng: Double)) async throws -> Int {
+        let url = URL(string:
+            "https://router.hereapi.com/v8/routes?transportMode=car&origin=\(from.lat),\(from.lng)&destination=\(to.lat),\(to.lng)&return=summary&apikey=\(apiKey)")!
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let routes = json?["routes"] as? [[String: Any]],
+              let sections = routes.first?["sections"] as? [[String: Any]],
+              let summary = sections.first?["summary"] as? [String: Any],
+              let duration = summary["duration"] as? Int else {
+            throw NSError(domain: "RouteError", code: 2)
+        }
+        return duration / 60 // دقائق
+    }
 }
