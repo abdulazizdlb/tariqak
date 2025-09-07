@@ -2,20 +2,37 @@ name: Tariqak
 options:
   deploymentTarget:
     iOS: "17.0"
+  bundleIdPrefix: com.example
+
+configFiles:
+  Debug: Config/Secrets.xcconfig
+  Release: Config/Secrets.xcconfig
 
 targets:
   Tariqak:
     type: application
     platform: iOS
     sources:
-      - Models
-      - Services  
-      - ViewModels
-      - Views
+      - path: Models
+        recursive: true
+      - path: Services
+        recursive: true  
+      - path: ViewModels
+        recursive: true
+      - path: Views
+        recursive: true
+      - path: Config/Theme.swift
       - TariqakApp.swift
     info:
       path: Config/Info.plist
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.example.tariqak
-      SWIFT_VERSION: 5.9
-      HERE_API_KEY: "$(HERE_API_KEY)"
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.tariqak
+        SWIFT_VERSION: 5.9
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Debug:
+          HERE_API_KEY: "$(HERE_API_KEY)"
+        Release:  
+          HERE_API_KEY: "$(HERE_API_KEY)"
