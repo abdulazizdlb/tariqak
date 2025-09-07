@@ -22,7 +22,6 @@ jobs:
   build-simulator:
     runs-on: macos-14
 
-    # Make the secret available (must be set in repo Settings → Secrets → Actions)
     env:
       HERE_API_KEY: ${{ secrets.HERE_API_KEY }}
 
@@ -38,50 +37,42 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      # Install XcodeGen if project.yml exists
       - name: Install XcodeGen
         run: |
-          if [ -f "project.yml" ]; then
-            echo "Found project.yml, installing XcodeGen..."
-            brew install xcodegen
-          else
-            echo "No project.yml found, skipping XcodeGen installation"
-          fi
+          echo "Installing XcodeGen..."
+          brew install xcodegen
+          xcodegen --version
 
-      # Generate Xcode project from project.yml
       - name: Generate Xcode Project
         run: |
-          if [ -f "project.yml" ]; then
-            echo "Generating Xcode project from project.yml..."
-            xcodegen generate
-            echo "Generated Tariqak.xcodeproj"
-            ls -la *.xcodeproj/
-          else
-            echo "No project.yml found, expecting existing .xcodeproj"
-          fi
+          echo "Generating Xcode project from project.yml..."
+          xcodegen generate
+          echo "Generated Tariqak.xcodeproj successfully"
+          ls -la *.xcodeproj/
 
-      # Create the Secrets.xcconfig the project expects at Config/Secrets.xcconfig
-      - name: Prepare Config/Secrets.xcconfig
+      - name: Create Config directory and Secrets.xcconfig
         run: |
+          echo "Creating Config directory..."
           mkdir -p Config
+          echo "Creating Secrets.xcconfig..."
           cat > Config/Secrets.xcconfig <<EOF
           HERE_API_KEY = ${HERE_API_KEY}
           EOF
           echo "Created Config/Secrets.xcconfig"
-
-      - name: Preview secrets file (redacted)
-        run: |
-          ls -la Config
+          echo "Contents (redacted):"
           sed -e 's/\(HERE_API_KEY *= *\).*/\1*** (redacted)/' Config/Secrets.xcconfig
 
       - name: Verify project structure
         run: |
           echo "=== Project Structure ==="
           find . -name "*.xcodeproj" -o -name "*.yml" -o -name "*.swift" | head -20
+          echo "=== Config Directory ==="
+          ls -la Config/
           echo "========================="
 
       - name: Resolve Swift Package dependencies
         run: |
+          echo "Resolving package dependencies..."
           xcodebuild -resolvePackageDependencies \
             -project Tariqak.xcodeproj \
             -scheme Tariqak
@@ -89,6 +80,7 @@ jobs:
       - name: Build iOS (simulator) + save log
         run: |
           set -eo pipefail
+          echo "Building iOS app for simulator..."
           mkdir -p build_logs
           xcodebuild \
             -project Tariqak.xcodeproj \
@@ -98,17 +90,18 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             build | tee build_logs/xcodebuild.log
+          echo "Build completed successfully!"
 
       - name: Quick error scan
         if: always()
         run: |
-          echo "---- Possible errors/warnings ----"
+          echo "---- Scanning for errors/warnings ----"
           if [ -f "build_logs/xcodebuild.log" ]; then
-            grep -nEi "error:|failed|fatal error|Undefined symbols|ld: " build_logs/xcodebuild.log || true
+            grep -nEi "error:|failed|fatal error|Undefined symbols|ld: " build_logs/xcodebuild.log || echo "No critical errors found"
           else
             echo "No build log found"
           fi
-          echo "----------------------------------"
+          echo "-------------------------------------"
 
       - name: Upload build log
         if: always()
