@@ -2,10 +2,17 @@ import Foundation
 
 struct HereTrafficProvider {
     private let apiKey: String = {
-        if let key = ProcessInfo.processInfo.environment["HERE_API_KEY"] {
+        // First try Info.plist (production)
+        if let key = Bundle.main.object(forInfoDictionaryKey: "HERE_API_KEY") as? String,
+           !key.isEmpty, key != "$(HERE_API_KEY)" {
+            return key
+        }
+        // Fallback to environment (development/CI)
+        else if let key = ProcessInfo.processInfo.environment["HERE_API_KEY"],
+                !key.isEmpty {
             return key
         } else {
-            fatalError("❌ HERE_API_KEY not set (xcconfig / Actions secret).")
+            fatalError("❌ HERE_API_KEY not found. Please check Config/Secrets.xcconfig")
         }
     }()
 
@@ -14,14 +21,24 @@ struct HereTrafficProvider {
         let q = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let url = URL(string: "https://geocode.search.hereapi.com/v1/geocode?q=\(q)&apiKey=\(apiKey)")!
 
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        // Check HTTP response
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            throw NSError(domain: "Here.Geocode", code: httpResponse.statusCode, 
+                         userInfo: [NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"])
+        }
+
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let items = json?["items"] as? [[String: Any]],
+              !items.isEmpty,
               let pos = (items.first?["position"] as? [String: Any]),
               let lat = pos["lat"] as? Double,
               let lng = pos["lng"] as? Double else {
-            throw NSError(domain: "Here.Geocode", code: 1, userInfo: [NSLocalizedDescriptionKey: "تعذّر استخراج الإحداثيات"])
+            throw NSError(domain: "Here.Geocode", code: 1, 
+                         userInfo: [NSLocalizedDescriptionKey: "تعذّر العثور على الإحداثيات للعنوان المُدخل"])
         }
         return (lat, lng)
     }
@@ -33,14 +50,25 @@ struct HereTrafficProvider {
           "https://router.hereapi.com/v8/routes?transportMode=car&origin=\(from.lat),\(from.lng)&destination=\(to.lat),\(to.lng)&return=summary&apikey=\(apiKey)"
         )!
 
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        // Check HTTP response
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            throw NSError(domain: "Here.Route", code: httpResponse.statusCode,
+                         userInfo: [NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"])
+        }
+
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let routes = json?["routes"] as? [[String: Any]],
+              !routes.isEmpty,
               let sections = routes.first?["sections"] as? [[String: Any]],
+              !sections.isEmpty,
               let summary = sections.first?["summary"] as? [String: Any],
               let durationSec = summary["duration"] as? Int else {
-            throw NSError(domain: "Here.Route", code: 2, userInfo: [NSLocalizedDescriptionKey: "تعذّر استخراج مدة الرحلة"])
+            throw NSError(domain: "Here.Route", code: 2, 
+                         userInfo: [NSLocalizedDescriptionKey: "تعذّر حساب مدة الرحلة"])
         }
         return max(1, durationSec / 60) // دقائق
     }
