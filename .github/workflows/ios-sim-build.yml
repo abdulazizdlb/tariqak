@@ -93,17 +93,22 @@ jobs:
           echo "Build completed successfully!"
 
 
-      - name: Find and zip the Simulator .app
+      - name: Zip Simulator .app for Appetize
         run: |
-          APP_PATH="$(find . -type d -name '*-iphonesimulator.app' | head -n 1)"
-          echo "Found app at: $APP_PATH"
-          zip -r appetize-sim.zip "$APP_PATH"
-
+          APP_DIR="build/Build/Products/Debug-iphonesimulator/Tariqak.app"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "App not found at $APP_DIR"
+            ls -R build/Build/Products || true
+            exit 1
+          fi
+          (cd "$(dirname "$APP_DIR")" && zip -r "$GITHUB_WORKSPACE/appetize-sim.zip" "$(basename "$APP_DIR")")
+      
       - name: Upload appetize zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: appetize-sim
           path: appetize-sim.zip
+
       - name: Quick error scan
         if: always()
         run: |
