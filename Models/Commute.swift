@@ -14,10 +14,10 @@ struct Commute: Identifiable, Hashable {
     // وقت الانطلاق
     var departure: Date = Date()
     
-    // أيام الأسبوع (0=الأحد، 1=الاثنين، ... 6=السبت)
+    // أيام الأسبوع (اختيارية لتفادي الأخطاء)
     var selectedDays: Set<Int> = []
     
-    // النافذة الزمنية
+    // النافذة الزمنية (اختيارية لتفادي الأخطاء)
     var windowStart: Date = Date()
     var windowEnd: Date = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
 }
