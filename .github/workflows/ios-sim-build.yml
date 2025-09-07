@@ -1,52 +1,67 @@
-name: iOS Simulator Build
+name: iOS Simulator CI
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+    paths:
+      - "**/*.swift"
+      - "**/*.plist"
+      - "**/*.xcconfig"
+      - "**/*.xcodeproj/**"
+      - ".github/workflows/ios-sim-build.yml"
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - "**/*.swift"
+      - "**/*.plist"
+      - "**/*.xcconfig"
+      - "**/*.xcodeproj/**"
+      - ".github/workflows/ios-sim-build.yml"
 
 jobs:
-  build:
-    runs-on: macos-15
+  build-simulator:
+    runs-on: macos-14
+
+    # Make the secret available (must be set in repo Settings → Secrets → Actions)
     env:
       HERE_API_KEY: ${{ secrets.HERE_API_KEY }}
-      
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create Secrets.xcconfig from repo secret
+
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.*"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # Create the Secrets.xcconfig the project expects at Config/Secrets.xcconfig
+      - name: Prepare Config/Secrets.xcconfig
         run: |
           mkdir -p Config
-          printf "HERE_API_KEY = %s\n" "$HERE_API_KEY" > Config/Secrets.xcconfig
+          cat > Config/Secrets.xcconfig <<EOF
+          HERE_API_KEY = ${HERE_API_KEY}
+          EOF
+          echo "Created Config/Secrets.xcconfig"
 
-      - name: Install Homebrew (if needed)
+      - name: Preview secrets file (redacted)
         run: |
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> $HOME/.zprofile
-          eval "$(/opt/homebrew/bin/brew shellenv)"
+          ls -la Config
+          sed -e 's/\(HERE_API_KEY *= *\).*/\1*** (redacted)/' Config/Secrets.xcconfig
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Create Secrets.xcconfig from repo secret
+      - name: Resolve Swift Package dependencies
         run: |
-          mkdir -p Config
-          echo "HERE_API_KEY = ${{ secrets.HERE_API_KEY }}" > Config/Secrets.xcconfig
+          xcodebuild -resolvePackageDependencies \
+            -project Tariqak.xcodeproj \
+            -scheme Tariqak
 
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Select latest Xcode on this runner
+      - name: Build iOS (simulator) + save log
         run: |
-          echo "Installed Xcodes:"
-          ls -1 /Applications | grep Xcode || true
-          # جرّب اختيار Xcode 16 إن وجد، وإلا يرجع لـ 15.4
-          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode_15.4.app
-          xcodebuild -version
-
-      - name: Build for iOS Simulator (Debug)
-        run: |
-          set -e
+          set -eo pipefail
+          mkdir -p build_logs
           xcodebuild \
             -project Tariqak.xcodeproj \
             -scheme Tariqak \
@@ -54,23 +69,26 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
-            build
+            build | tee build_logs/xcodebuild.log
 
-      - name: Package .app as zip
+      - name: Quick error scan
+        if: always()
         run: |
-          set -e
-          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -type d -name "*.app" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "❌ No .app found. Check previous step logs."
-            exit 1
-          fi
-          echo "✅ Found app at: $APP_PATH"
-          cd "$(dirname "$APP_PATH")"
-          zip -r Tariqak-Simulator.zip "$(basename "$APP_PATH")"
-          mv Tariqak-Simulator.zip $GITHUB_WORKSPACE
+          echo "---- Possible errors/warnings ----"
+          grep -nEi "error:|failed|fatal error|Undefined symbols|ld: " build_logs/xcodebuild.log || true
+          echo "----------------------------------"
 
-      - name: Upload artifact
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Tariqak-Simulator
-          path: Tariqak-Simulator.zip
+          name: xcodebuild-log
+          path: build_logs/xcodebuild.log
+
+      - name: Upload .app product (if produced)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tariqak-Debug-iphonesimulator.app
+          path: build/Build/Products/Debug-iphonesimulator/Tariqak.app
+          if-no-files-found: ignore
