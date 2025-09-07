@@ -1,91 +1,133 @@
-import Foundation
-import Combine
+import SwiftUI
 
-@MainActor
-final class HomeViewModel: ObservableObject {
-    // MARK: - Dependencies
-    let engine: PredictionEngine
+struct HomeView: View {
+    @State private var homeAddress = ""
+    @State private var workAddress = ""
+    @State private var selectedDays: Set<Int> = [1, 2, 3, 4, 5] // الأحد-الخميس
+    @State private var windowStart = Date()
+    @State private var windowEnd = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+    @State private var showToast = false
     
-    // MARK: - Published Properties
-    @Published var commute: Commute
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    @Published var showToast = false
-    @Published var toastMessage = ""
+    let onCalculate: (Commute) -> Void
     
-    // MARK: - Input Properties
-    @Published var fromText = "" {
-        didSet { commute.homeAddress = fromText }
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    Image(systemName: "car.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.brandGradient)
+                    
+                    Text("احسب أفضل وقت للمغادرة")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 20)
+                
+                // Address Inputs
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("عنوان المنزل", systemImage: "house.fill")
+                            .font(.headline)
+                        
+                        TextField("أدخل عنوان منزلك", text: $homeAddress)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("عنوان العمل", systemImage: "building.2.fill")
+                            .font(.headline)
+                        
+                        TextField("أدخل عنوان عملك", text: $workAddress)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                
+                // Simple Days Selection
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("أيام العمل", systemImage: "calendar")
+                        .font(.headline)
+                    
+                    Text("الأيام المختارة: \(selectedDays.count) أيام")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                // Time Selection
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("النافذة الزمنية", systemImage: "clock.fill")
+                        .font(.headline)
+                    
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("من:")
+                                .font(.subheadline)
+                            DatePicker("", selection: $windowStart, displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("إلى:")
+                                .font(.subheadline)
+                            DatePicker("", selection: $windowEnd, displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                        }
+                    }
+                }
+                
+                // Calculate Button
+                Button(action: handleCalculate) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.right.circle.fill")
+                        Text("احسب الآن")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Theme.brandGradient)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .disabled(!isFormValid)
+                .opacity(isFormValid ? 1.0 : 0.6)
+                
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal, 20)
+        }
+        .background(Theme.bg)
+        .navigationTitle("طريقك")
+        .environment(\.layoutDirection, .rightToLeft)
+        .toast(isPresented: $showToast, text: "تم حفظ التفضيلات")
     }
     
-    @Published var toText = "" {
-        didSet { commute.workAddress = toText }
-    }
-    
-    @Published var selectedDays: Set<Int> = [] {
-        didSet { commute.selectedDays = selectedDays }
-    }
-    
-    @Published var windowStart = Date() {
-        didSet { commute.windowStart = windowStart }
-    }
-    
-    @Published var windowEnd = Date() {
-        didSet { commute.windowEnd = windowEnd }
-    }
-    
-    // MARK: - Computed Properties
-    var isFormValid: Bool {
-        !fromText.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !toText.trimmingCharacters(in: .whitespaces).isEmpty &&
+    private var isFormValid: Bool {
+        !homeAddress.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !workAddress.trimmingCharacters(in: .whitespaces).isEmpty &&
         !selectedDays.isEmpty
     }
     
-    // MARK: - Initialization
-    init(engine: PredictionEngine, commute: Commute = Commute()) {
-        self.engine = engine
-        self.commute = commute
-        
-        loadSavedPreferences()
-        setupBindings()
-    }
-    
-    // MARK: - Private Methods
-    private func setupBindings() {
-        fromText = commute.homeAddress
-        toText = commute.workAddress
-        selectedDays = commute.selectedDays
-        windowStart = commute.windowStart
-        windowEnd = commute.windowEnd
-    }
-    
-    private func loadSavedPreferences() {
-        let prefs = UserPrefsStore.shared.load()
-        fromText = prefs.homeAddress
-        toText = prefs.workAddress
-        if !prefs.weekdays.isEmpty {
-            selectedDays = Set(prefs.weekdays)
-        }
-    }
-    
-    // MARK: - Public Methods
-    func updateCommuteIfNeeded() {
-        commute.homeAddress = fromText.trimmingCharacters(in: .whitespaces)
-        commute.workAddress = toText.trimmingCharacters(in: .whitespaces)
-        commute.selectedDays = selectedDays
-        commute.windowStart = windowStart
-        commute.windowEnd = windowEnd
-    }
-    
-    func saveUserPrefs() {
-        let prefs = UserPrefs(
-            homeAddress: fromText.trimmingCharacters(in: .whitespaces),
-            workAddress: toText.trimmingCharacters(in: .whitespaces),
-            weekdays: Array(selectedDays)
+    private func handleCalculate() {
+        let commute = Commute(
+            homeAddress: homeAddress.trimmingCharacters(in: .whitespaces),
+            workAddress: workAddress.trimmingCharacters(in: .whitespaces),
+            selectedDays: selectedDays,
+            windowStart: windowStart,
+            windowEnd: windowEnd
         )
         
+        // Save preferences
+        let prefs = UserPrefs(
+            homeAddress: homeAddress,
+            workAddress: workAddress,
+            weekdays: Array(selectedDays)
+        )
         UserPrefsStore.shared.save(prefs)
-        toastMessage = "تم حفظ التفضيلات بنجاح"
         showToast = true
+        
+        // Navigate
+        onCalculate(commute)
     }
 }
