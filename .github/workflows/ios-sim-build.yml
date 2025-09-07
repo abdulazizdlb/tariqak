@@ -7,7 +7,7 @@ on:
       - "**/*.swift"
       - "**/*.plist"
       - "**/*.xcconfig"
-      - "**/*.xcodeproj/**"
+      - "**/*.yml"
       - ".github/workflows/ios-sim-build.yml"
   pull_request:
     branches: [ main, master ]
@@ -15,7 +15,7 @@ on:
       - "**/*.swift"
       - "**/*.plist"
       - "**/*.xcconfig"
-      - "**/*.xcodeproj/**"
+      - "**/*.yml"
       - ".github/workflows/ios-sim-build.yml"
 
 jobs:
@@ -38,6 +38,28 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      # Install XcodeGen if project.yml exists
+      - name: Install XcodeGen
+        run: |
+          if [ -f "project.yml" ]; then
+            echo "Found project.yml, installing XcodeGen..."
+            brew install xcodegen
+          else
+            echo "No project.yml found, skipping XcodeGen installation"
+          fi
+
+      # Generate Xcode project from project.yml
+      - name: Generate Xcode Project
+        run: |
+          if [ -f "project.yml" ]; then
+            echo "Generating Xcode project from project.yml..."
+            xcodegen generate
+            echo "Generated Tariqak.xcodeproj"
+            ls -la *.xcodeproj/
+          else
+            echo "No project.yml found, expecting existing .xcodeproj"
+          fi
+
       # Create the Secrets.xcconfig the project expects at Config/Secrets.xcconfig
       - name: Prepare Config/Secrets.xcconfig
         run: |
@@ -51,6 +73,12 @@ jobs:
         run: |
           ls -la Config
           sed -e 's/\(HERE_API_KEY *= *\).*/\1*** (redacted)/' Config/Secrets.xcconfig
+
+      - name: Verify project structure
+        run: |
+          echo "=== Project Structure ==="
+          find . -name "*.xcodeproj" -o -name "*.yml" -o -name "*.swift" | head -20
+          echo "========================="
 
       - name: Resolve Swift Package dependencies
         run: |
@@ -75,7 +103,11 @@ jobs:
         if: always()
         run: |
           echo "---- Possible errors/warnings ----"
-          grep -nEi "error:|failed|fatal error|Undefined symbols|ld: " build_logs/xcodebuild.log || true
+          if [ -f "build_logs/xcodebuild.log" ]; then
+            grep -nEi "error:|failed|fatal error|Undefined symbols|ld: " build_logs/xcodebuild.log || true
+          else
+            echo "No build log found"
+          fi
           echo "----------------------------------"
 
       - name: Upload build log
@@ -84,6 +116,7 @@ jobs:
         with:
           name: xcodebuild-log
           path: build_logs/xcodebuild.log
+          if-no-files-found: ignore
 
       - name: Upload .app product (if produced)
         if: always()
