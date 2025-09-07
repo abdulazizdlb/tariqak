@@ -19,6 +19,7 @@ on:
       - ".github/workflows/ios-sim-build.yml"
 
 jobs:
+
   build-simulator:
     runs-on: macos-14
 
@@ -76,7 +77,13 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -project Tariqak.xcodeproj \
             -scheme Tariqak
-
+      - name: Write Secrets.xcconfig with real HERE_API_KEY
+        run: |
+          mkdir -p Config
+          cat > Config/Secrets.xcconfig << EOF
+          HERE_API_KEY = ${{ secrets.HERE_API_KEY }}
+          EOF
+          echo "✅ Secrets.xcconfig created"
       - name: Build iOS (simulator) + save log
         run: |
           set -eo pipefail
